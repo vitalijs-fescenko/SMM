@@ -1,6 +1,21 @@
 # SMM
 
 
+
+
+## requirements
+```bash
+
+# install SAM
+cd sam
+pip install -e .
+pip install matplotlib
+
+
+
+```
+
+
 ## Docker instructions
 Build
 ```bash
