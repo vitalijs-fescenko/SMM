@@ -4,15 +4,13 @@ from torch.nn import functional as F
 from typing import Any, Dict, List, Tuple
 import numpy as np
 
-
 from segment_anything.modeling.image_encoder import ImageEncoderViT
-
 from segment_anything.utils.transforms import ResizeLongestSide
 
-# adapted from segment_anything.modeling.sam
-
+# encoder and general structure adapted from segment_anything.modeling.sam
+# instance head adapted from detectron2.projects.Panoptic-DeepLab.panoptic_deeplab.panoptic_seg.py
 class SMM(nn.Module):
-    mask_threshold: float = 0.0
+    #mask_threshold: float = 0.0
     image_format: str = "RGB"
 
     def __init__(
@@ -32,9 +30,31 @@ class SMM(nn.Module):
         """
         super().__init__()
         self.image_encoder = image_encoder
+
+        # Freeze all backbone parameters
+        for param in self.image_encoder.parameters():
+            param.requires_grad = False
+
         self.transform = ResizeLongestSide(self.image_encoder.img_size)
         self.register_buffer("pixel_mean", torch.Tensor(pixel_mean).view(-1, 1, 1), False)
         self.register_buffer("pixel_std", torch.Tensor(pixel_std).view(-1, 1, 1), False)
+
+        self.center_predictor = nn.Sequential(
+            nn.Upsample(scale_factor=2, mode="nearest"),   # 64→128
+            nn.Conv2d(256, 1, kernel_size=3, padding=1)   # mix channels
+        )
+
+        nn.init.normal_(self.center_predictor[1].weight, 0, 0.001)
+        nn.init.constant_(self.center_predictor[1].bias, 0)
+
+        self.offset_predictor = nn.Sequential(
+            nn.Upsample(scale_factor=2, mode="nearest"),   # 64→128
+            nn.Conv2d(256, 2, kernel_size=3, padding=1)   # mix channels
+        )
+
+        nn.init.normal_(self.offset_predictor[1].weight, 0, 0.001)
+        nn.init.constant_(self.offset_predictor[1].bias, 0)
+
 
     @property
     def device(self) -> Any:
@@ -132,6 +152,21 @@ class SMM(nn.Module):
         padw = self.image_encoder.img_size - w
         x = F.pad(x, (0, padw, 0, padh))
         return x
+
+
+    def _forward_center(self, input_tensor: torch.Tensor):
+        return self.center_predictor(input_tensor)
+
+
+    def _forward_offset(self, input_tensor: torch.Tensor):
+        return self.offset_predictor(input_tensor)
+
+    
+    def _forward(self, image: np.ndarray):
+        x = self._forward_encoder(image)
+        cx = self._forward_center(x)
+        co = self._forward_offset(x)
+        return cx, co
 
 
     def _forward_encoder(

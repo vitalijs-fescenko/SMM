@@ -20,6 +20,12 @@ smm.to(device=device)
 
 image = cv2.imread('images/flowers.jpg')
 image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-embeddings = smm._forward_encoder(image)
+#embeddings = smm._forward_encoder(image)
 
-print(embeddings.shape)
+#print(embeddings.shape)
+
+out, out2 = smm._forward(image)
+
+print(out.shape)
+print(out2.shape)
+

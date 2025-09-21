@@ -3,3 +3,7 @@ weights
 __pycache__
 .cache
 .local
+.ipynb_checkpoints
+.ipython
+.jupyter
+
